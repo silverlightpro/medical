@@ -1,6 +1,0 @@
-{
-  "name": "Copy of Health Records Hub",
-  "description": "A personal health records management system to upload medical documents (PDFs), track vitals, and monitor health progress. PDFs are processed to extract information, which can be reviewed and edited by the user.",
-  "requestFramePermissions": [],
-  "prompt": ""
-}
