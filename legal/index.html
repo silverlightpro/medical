@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Attorney Finder</title>
+    <!-- Chosen Palette: Slate Gray & Powder Blue -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard. The primary structure consists of: 1) A top control panel with filters for legal services, languages, and county, plus a search bar for names. This allows for immediate, intuitive data reduction. 2) A summary section that provides at-a-glance analytics with two charts (Attorneys by County, Attorneys by Language) to give users a high-level overview of the data. 3) A dynamic grid of attorney "cards" which is more responsive and scannable than a traditional table. This structure was chosen because the main user task is finding a specific type of attorney; therefore, filtering and searching are prioritized. The cards and charts make the data more digestible and visually engaging than a dense table. A modal is used for detailed views to keep the main interface clean and focused. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Full list of attorneys. Goal: Organize & Compare. Viz/Method: Interactive Card Grid (HTML/CSS/JS). Interaction: Users can filter the grid using top-level controls. Justification: Superior to a static table for usability and responsiveness. Allows users to quickly narrow down 92+ entries.
+        - Report Info: Attorney County Data. Goal: Compare distribution. Viz/Method: Bar Chart (Chart.js/Canvas). Interaction: Hover to see exact counts. Justification: Effectively shows the volume of attorneys in each geographical area.
+        - Report Info: Attorney Language Data. Goal: Show language diversity. Viz/Method: Pie Chart (Chart.js/Canvas). Interaction: Hover to see percentages/counts. Justification: A pie chart is intuitive for showing parts of a whole, in this case, the language pool.
+        - Report Info: Detailed Attorney Info. Goal: Inform. Viz/Method: Modal Window (HTML/CSS/JS). Interaction: Click a "View Details" button on a card. Justification: Prevents cluttering the main view and provides a focused space for comprehensive details without navigating away.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .modal-bg {
+            background-color: rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-6">
+            <h1 class="text-3xl font-bold text-slate-900">Interactive Attorney Finder</h1>
+            <p class="text-slate-600 mt-1">Explore and connect with legal professionals in your area.</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-6 lg:p-8">
+
+        <section id="controls" class="bg-white p-6 rounded-xl shadow-sm mb-8">
+            <h2 class="text-xl font-bold mb-4">Filter & Search</h2>
+            <p class="text-slate-600 mb-6">Use the controls below to narrow your search. The results will update automatically as you make selections.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <input type="text" id="nameSearch" placeholder="Search by attorney name..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                <select id="serviceFilter" class="w-full p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></select>
+                <select id="languageFilter" class="w-full p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></select>
+                <select id="countyFilter" class="w-full p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></select>
+            </div>
+        </section>
+
+        <section id="analytics" class="mb-8">
+             <h2 class="text-xl font-bold mb-4">Area Analytics</h2>
+             <p class="text-slate-600 mb-6">These charts provide a high-level overview of the legal professionals in this directory, helping you understand the distribution by county and language.</p>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Attorneys by County</h3>
+                    <div class="chart-container">
+                        <canvas id="countyChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Attorneys by Language</h3>
+                    <div class="chart-container">
+                        <canvas id="languageChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="results">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Search Results</h2>
+                <p id="resultsCount" class="text-slate-600 font-medium"></p>
+            </div>
+            <div id="attorneyGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            </div>
+        </section>
+
+    </main>
+
+    <div id="attorneyModal" class="fixed inset-0 modal-bg items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-slate-200 sticky top-0 bg-white z-10">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 id="modalName" class="text-2xl font-bold text-slate-900"></h3>
+                        <p id="modalAddress" class="text-slate-600 mt-1"></p>
+                    </div>
+                    <button id="closeModal" class="text-slate-500 hover:text-slate-800 transition p-1 rounded-full">&times;</button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Contact Information</h4>
+                        <p id="modalPhone" class="text-slate-600"></p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Location</h4>
+                        <p id="modalCounty" class="text-slate-600"></p>
+                        <p id="modalDistance" class="text-slate-600"></p>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h4 class="font-semibold text-slate-700 mb-2">Languages Spoken</h4>
+                    <div id="modalLanguages" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div class="mt-6">
+                    <h4 class="font-semibold text-slate-700 mb-2">Legal Services</h4>
+                    <ul id="modalServices" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const attorneyData = [
+            { name: "Mayr Lee APC", address: "453 N Central Ave, Upland CA, 91786", county: "San Bernardino County", phone: "909-493-6603", services: ["Debt Collection / Identity Theft Defense", "Purchase Of Residence", "Sale Of Residence", "Deed", "Promissory Note", "Eviction & Tenant Problems (tenant only)", "Mortgage", "Refinance/Home Equity Loans"], languages: ["English", "Spanish"], distance: 3 },
+            { name: "Bay Legal PC", address: "3200 Guasti Road, Suite 100, Ontario CA, 91761", county: "San Bernardino County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 4 },
+            { name: "Meraki Law", address: "3200 Guasti Road, Ontario CA, 91761", county: "San Bernardino County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 4 },
+            { name: "Lee Law Center", address: "9431 Haven Ave. 100, Rancho Cucamonga CA, 91730", county: "San Bernardino County", phone: "714-726-1529", services: ["Personal Injury", "Last Will and Testament", "Advance Healthcare Directive", "Insurance Claims (client's own carrier)", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Property Damage"], languages: ["Korean", "Spanish", "English", "Vietnamese"], distance: 4 },
+            { name: "Peter Stone, APC.", address: "12495 Limonite Ave 1148, Eastvale CA, 91752", county: "Riverside County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 8 },
+            { name: "Meraki Law", address: "1502 Foothill Blvd., #103-525, La Verne CA, 91750", county: "Los Angeles County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 8 },
+            { name: "Peter Stone, APC.", address: "7426 CHERRY AVE 210, FONTANA CA, 92336", county: "San Bernardino County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Filipino"], distance: 10 },
+            { name: "Bay Legal PC", address: "1370 Valley Vista Drive, Diamond Bar CA, 91765", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 12 },
+            { name: "Bay Legal PC", address: "11801 Pierce Street, Riverside CA, 92505", county: "Riverside County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 14 },
+            { name: "Antaramian Law, APC", address: "11801 Pierce Street 200, Riverside CA, 92505", county: "Riverside County", phone: "818-480-2218", services: ["Property Tax Assessments", "Service for non-covered matters", "Refinance/Home Equity Loans", "Rental Property Leases", "Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage"], languages: ["English", "Armenian", "Spanish"], distance: 14 },
+            { name: "Katje Law Group, APC", address: "130 S. Chaparral Court Suite 140, Anaheim CA, 92808", county: "Orange County", phone: "714-400-2970", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Spanish"], distance: 15 },
+            { name: "Bay Legal PC", address: "1050 Lakes Drive, West Covina CA, 91790", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 16 },
+            { name: "Meraki Law", address: "1050 Lakes Dr Suite 225, West Covina CA, 91790", county: "Los Angeles County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 16 },
+            { name: "Law Office of Hedy Zhang", address: "3419 Ashbourne Place, Rowland Heights CA, 91748", county: "Los Angeles County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 17 },
+            { name: "Peter Stone, APC.", address: "2999 Kendall Dr Ste 204 PMB 1211, SAN BERNARDINO CA, 92407", county: "San Bernardino County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 19 },
+            { name: "Thordsen Law Offices", address: "4160 Temescal Canyon Road Suite 401, Corona CA, 92883", county: "Riverside County", phone: "714-662-4990", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Adoption (uncontested)", "Guardianship (uncontested)"], languages: ["English"], distance: 19 },
+            { name: "Law Office of Fay Arghavani", address: "1440 North Harbor Boulevard Suite 900, Fullerton CA, 92835", county: "Orange County", phone: "714-773-5529", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Farsi", "English", "Spanish"], distance: 20 },
+            { name: "Lee Law Center", address: "1440 N. Harbor Blvd Suite 900, Fullerton CA, 92835", county: "Orange County", phone: "714-726-1529", services: ["Personal Injury", "Last Will and Testament", "Advance Healthcare Directive", "Insurance Claims (client's own carrier)", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Property Damage"], languages: ["Korean", "Spanish", "English", "Vietnamese"], distance: 20 },
+            { name: "Law Offices of Saman Behnam, PLC", address: "8544 East Chapman Suite B, Orange CA, 92869", county: "Orange County", phone: "562-436-1500", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Farsi", "English", "Spanish"], distance: 20 },
+            { name: "Bay Legal PC", address: "440 East Huntington Drive, Arcadia CA, 91006", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 22 },
+            { name: "Meraki Law", address: "2400 East Katella Ave 8th Fl., Anaheim CA, 92806", county: "Orange County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 22 },
+            { name: "Bay Legal PC", address: "22550 Town Circle, Moreno Valley CA, 92553", county: "Riverside County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 23 },
+            { name: "Samaniego Law", address: "7901 Painter Avenue Suite 5, Whittier CA, 90602", county: "Los Angeles County", phone: "562-206-0245", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English", "French"], distance: 23 },
+            { name: "Wenzel & Associates", address: "17731 Irvine Blvd. Suite 107, Tustin CA, 92780", county: "Orange County", phone: "714-564-9400", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 24 },
+            { name: "Gutierrez & Nguyen", address: "14291 Euclid Street Suite D103, Garden Grove CA, 92843", county: "Orange County", phone: "949-533-1424", services: ["Prenuptial Agreement", "Divorce / Dissolution (uncontested)", "Name Change", "Miscellaneous Family Law", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning"], languages: ["English", "Vietnamese"], distance: 27 },
+            { name: "Bay Legal PC", address: "17777 Center Court Drive Suite 600, Cerritos CA, 90703", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 27 },
+            { name: "Ching & Seto", address: "7545 Irvine Center Drive Suite 200, Irvine CA, 92618", county: "Orange County", phone: "858-397-9060", services: ["Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems", "Purchase Of Residence", "Sale Of Residence", "Promissory Note"], languages: ["Mandarin", "Chinese", "Taiwanese", "English"], distance: 28 },
+            { name: "JHK Law, APC", address: "35 N. Lake Ave. Suite 710, Pasadena CA, 91101", county: "Los Angeles County", phone: "213-387-0394", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Purchase Of Residence"], languages: ["Korean", "English", "Spanish"], distance: 28 },
+            { name: "Ching & Seto", address: "680 E. Colorado Blvd, Pasadena CA, 91101", county: "Los Angeles County", phone: "858-397-9060", services: ["Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems", "Purchase Of Residence", "Sale Of Residence", "Promissory Note"], languages: ["Mandarin", "Chinese", "Taiwanese", "English"], distance: 28 },
+            { name: "Law Office of Mark T. Risner", address: "1 Park Plaza 600, Irvine CA, 92614", county: "Orange County", phone: "949-442-8302", services: ["Service for non-covered matters", "Boundary/Title Disputes", "Miscellaneous Real Estate Matters", "Miscellaneous Matters", "Security Deposit Assistance", "Debt Collection / Identity Theft Defense"], languages: [], distance: 29 },
+            { name: "Lee Law Center", address: "18000 Studebaker Road 700, Cerritos CA, 90703", county: "Los Angeles County", phone: "714-726-1529", services: ["Personal Injury", "Last Will and Testament", "Advance Healthcare Directive", "Insurance Claims (client's own carrier)", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Property Damage"], languages: ["Korean", "Spanish", "English", "Vietnamese"], distance: 29 },
+            { name: "Law Office of Fay Arghavani", address: "2030 Main Street Suite 1300, Irvine CA, 92614", county: "Orange County", phone: "714-773-5529", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Farsi", "English", "Spanish"], distance: 29 },
+            { name: "Gutierrez & Nguyen", address: "18000 Studebaker Suite 700, Cerritos CA, 90703", county: "Los Angeles County", phone: "949-533-1424", services: ["Prenuptial Agreement", "Divorce / Dissolution (uncontested)", "Name Change", "Miscellaneous Family Law", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning"], languages: ["English", "Vietnamese"], distance: 29 },
+            { name: "Jamison Law Firm,", address: "301 E. Colorado Blvd 510, Pasadena CA, 91101", county: "Los Angeles County", phone: "626-356-7902", services: ["Boundary/Title Disputes", "Miscellaneous Real Estate Matters", "Civil Litigation Defense", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English"], distance: 29 },
+            { name: "Antaramian Law, APC", address: "300 Spectrum Center Drive Suite 400, Irvine CA, 92618", county: "Orange County", phone: "818-480-2218", services: ["Property Tax Assessments", "Service for non-covered matters", "Refinance/Home Equity Loans", "Rental Property Leases", "Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage"], languages: ["English", "Armenian", "Spanish"], distance: 29 },
+            { name: "Bentler Mulder, LLP", address: "2040 Main Street 150, Irvine CA, 92614", county: "Orange County", phone: "949-880-0098", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Deed", "Promissory Note", "Eviction & Tenant Problems (tenant only)"], languages: ["English"], distance: 29 },
+            { name: "Lee Law Center", address: "1 Park Plaza 600, Irvine CA, 92614", county: "Orange County", phone: "714-726-1529", services: ["Personal Injury", "Last Will and Testament", "Advance Healthcare Directive", "Insurance Claims (client's own carrier)", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Property Damage"], languages: ["Korean", "Spanish", "English", "Vietnamese"], distance: 29 },
+            { name: "Law Office of Hedy Zhang", address: "299 N. Euclid Avenue, Pasadena CA, 91101", county: "Los Angeles County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 29 },
+            { name: "Gutierrez & Nguyen", address: "4000 MacArthur Blvd. Suite 600, Newport Beach CA, 92660", county: "Orange County", phone: "949-533-1424", services: ["Prenuptial Agreement", "Divorce / Dissolution (uncontested)", "Name Change", "Miscellaneous Family Law", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning"], languages: ["English", "Vietnamese"], distance: 30 },
+            { name: "Gutierrez & Nguyen", address: "19200 Von Karman Avenue Suite 400, Irvine CA, 92612", county: "Orange County", phone: "949-533-1424", services: ["Prenuptial Agreement", "Divorce / Dissolution (uncontested)", "Name Change", "Miscellaneous Family Law", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning"], languages: ["English", "Vietnamese"], distance: 30 },
+            { name: "360 Consumer Law A Professional Corporation", address: "10055 Slater Ave. Suite 250, Fountain Valley CA, 92708", county: "Orange County", phone: "562-600-9989", services: ["Boundary/Title Disputes", "Miscellaneous Real Estate Matters", "Small Claims Court/Personal Property Prot", "Plaintiff Consumer", "Civil Litigation Defense", "Deed", "Promissory Note"], languages: ["English", "Spanish"], distance: 30 },
+            { name: "Bay Legal PC", address: "3330 Harbor Blvd 2nd floor, Costa Mesa CA, 92626", county: "Orange County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 30 },
+            { name: "Tran, Mendoza LLP", address: "10055 Slater Avenue Suite 216, Fountain Valley CA, 92708", county: "Orange County", phone: "657-259-0020", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Vietnamese", "English", "Spanish"], distance: 30 },
+            { name: "Law Office of Hedy Zhang", address: "6241 Sierra Brano Road, Irvine CA, 92603", county: "Orange County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 31 },
+            { name: "Thordsen Law Offices", address: "9042 Garfield Avenue Suite 202, Huntington Beach CA, 92646", county: "Orange County", phone: "714-662-4990", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Name Change", "Adoption (uncontested)", "Guardianship (uncontested)", "Miscellaneous Family Law"], languages: ["English"], distance: 32 },
+            { name: "Bay Legal PC", address: "777 South Alameda, Los Angeles CA, 90021", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 34 },
+            { name: "Law Office of Hedy Zhang", address: "19555 Grandiew Circle, Huntington Beach CA, 92648", county: "Orange County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 34 },
+            { name: "Lee Law Center", address: "3780 Kilroy Airport Way 200, Long Beach CA, 90806", county: "Los Angeles County", phone: "714-726-1529", services: ["Last Will and Testament", "Personal Injury", "Advance Healthcare Directive", "Insurance Claims (client's own carrier)", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Property Damage"], languages: ["Korean", "Spanish", "English", "Vietnamese"], distance: 34 },
+            { name: "Samaniego Law", address: "5150 E Pacific Coast Highway Suite 200, Long Beach CA, 90804", county: "Los Angeles County", phone: "562-206-0245", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Name Change"], languages: ["English", "French"], distance: 34 },
+            { name: "Gutierrez & Nguyen", address: "3780 Kilroy Airport Way Suite 200, Long Beach CA, 90806", county: "Los Angeles County", phone: "949-533-1424", services: ["Prenuptial Agreement", "Divorce / Dissolution (uncontested)", "Name Change", "Miscellaneous Family Law", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning"], languages: ["English", "Vietnamese"], distance: 34 },
+            { name: "Bay Legal PC", address: "633 West Fifth Street 26th & 28th Floors, Los Angeles CA, 90071", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 35 },
+            { name: "Aron C. Movroydis, Esq.", address: "28202 Cabot Road Suite 300, Laguna Niguel CA, 92677", county: "Orange County", phone: "949-340-0076", services: ["Purchase Of Residence", "Sale Of Residence", "Deed", "Promissory Note", "Eviction & Tenant Problems (tenant only)", "Mortgage", "Refinance/Home Equity Loans", "Boundary/Title Disputes"], languages: ["English"], distance: 35 },
+            { name: "Delcin Consulting Group", address: "355 S Grand Avenue, Suite 2450, Los Angeles CA, 90071", county: "Los Angeles County", phone: "213-265-2994", services: ["Service for non-covered matters", "Immigration Representation", "Miscellaneous Matters", "Business, Including Rental Property", "Plaintiff Consumer", "Immigration Assistance", "Administrative Law"], languages: ["English"], distance: 35 },
+            { name: "Antaramian Law, APC", address: "450 N. Brand Blvd 600, Glendale CA, 91203", county: "Los Angeles County", phone: "818-480-2218", services: ["Property Tax Assessments", "Service for non-covered matters", "Refinance/Home Equity Loans", "Rental Property Leases", "Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage"], languages: ["English", "Armenian", "Spanish"], distance: 35 },
+            { name: "JHK Law, APC", address: "201 N. Brand Blvd. 200, Glendale CA, 91203", county: "Los Angeles County", phone: "213-387-0394", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense"], languages: ["Korean", "English", "Spanish"], distance: 35 },
+            { name: "Counterpoint Legal", address: "355 S Grand 2450, Los Angeles CA, 90071", county: "Los Angeles County", phone: "213-772-1502", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 35 },
+            { name: "Bay Legal PC", address: "201 N. Brand Blvd., Suite 200, Glendale CA, 91203", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 35 },
+            { name: "Peter Stone, APC.", address: "1701 South Figueroa 1223, Los Angeles CA, 90015", county: "Los Angeles County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 36 },
+            { name: "Stacy Joel Safion, Esq.", address: "30011 Ivy Glenn Drive Suite 121, Laguna Niguel CA, 92677", county: "Orange County", phone: "949-347-0300", services: ["Service for non-covered matters", "Miscellaneous Real Estate Matters", "Personal Injury", "Property Damage (plaintiff)", "Miscellaneous Injury / Insurance Matters", "Debt Collection / Identity Theft Defense"], languages: ["English"], distance: 37 },
+            { name: "Bay Legal PC", address: "120 E 3rd St, 1st & 2nd Floor, Long Beach CA, 90802", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 37 },
+            { name: "Law Offices of Saman Behnam, PLC", address: "354 West Ocean Boulevard, Long Beach CA, 90802", county: "Los Angeles County", phone: "562-436-1500", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Farsi", "English", "Spanish"], distance: 38 },
+            { name: "Bay Legal PC", address: "303 North Glenoaks Blvd. Suite 200, Burbank CA, 91502", county: "Los Angeles County", phone: "650-374-7900", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English", "Hindi", "French"], distance: 39 },
+            { name: "Law Office of Hedy Zhang", address: "1515 W. 190th Street, Gardena CA, 90248", county: "Los Angeles County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 40 },
+            { name: "Peter Stone, APC.", address: "4821 Lankershim Bl 1092, North Hollywood CA, 91601", county: "Los Angeles County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 42 },
+            { name: "Spartan Law Corporation", address: "427 N Canon Drive Suite 212, Beverly Hills CA, 90210", county: "Los Angeles County", phone: "323-450-7000", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Armenian", "Russian", "English", "Spanish"], distance: 43 },
+            { name: "Hillary Johns, Trial Lawyer", address: "9465 Wilshire Boulevard Suite 300, Beverly Hills CA, 90212", county: "Los Angeles County", phone: "310-492-4009", services: ["Purchase Of Residence", "Sale Of Residence", "Deed", "Promissory Note", "Eviction & Tenant Problems (tenant only)", "Mortgage", "Refinance/Home Equity Loans", "Boundary/Title Disputes"], languages: ["English"], distance: 43 },
+            { name: "Peter Stone, APC.", address: "9461 Charleville Blvd 1061, Beverly Hills CA, 90210", county: "Los Angeles County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 43 },
+            { name: "Law Office of Michael S. Braun", address: "21515 Hawthorne Boulevard Suite 670, Torrance CA, 90503", county: "Los Angeles County", phone: "310-984-3220", services: ["Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage (plaintiff)", "Miscellaneous Injury / Insurance Matters", "Small Claims Court/Personal Property Prot", "Plaintiff Consumer"], languages: ["English", "Spanish"], distance: 43 },
+            { name: "Law Office of Hedy Zhang", address: "11835 West Olympic Boulevard Suite 1090, Los Angeles CA, 90064", county: "Los Angeles County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 46 },
+            { name: "Prime Pacific Law Firm", address: "11400 W. Olympic Blvd 200, Los Angeles CA, 90064", county: "Los Angeles County", phone: "877-485-5840", services: ["Service for non-covered matters", "Miscellaneous Matters", "Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage (plaintiff)", "Miscellaneous Injury / Insurance Matters"], languages: ["Farsi", "English"], distance: 46 },
+            { name: "Lyda Law Firm PC", address: "10880 Wilshire Blvd. 1101, Los Angeles CA, 90024", county: "Los Angeles County", phone: "855-855-9400", services: ["Prenuptial Agreement", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence"], languages: ["English"], distance: 46 },
+            { name: "Peter Stone, APC.", address: "6221 Van Nuys Blvd 1011, Van Nuys CA, 91401", county: "Los Angeles County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 47 },
+            { name: "Bay Legal PC", address: "41877 Enterprise Circle N., Temecula CA, 92590", county: "Riverside County", phone: "650-374-7900", services: ["Service for non-covered matters", "Miscellaneous Real Estate Matters", "Sale or Purchase of Rental Property", "Civil Litigation Defense", "Last Will and Testament", "Power Of Attorney"], languages: ["English", "Hindi", "French"], distance: 47 },
+            { name: "Law Offices of Gabriel Sandoval", address: "15260 Ventura Blvd Suite 1200, Sherman Oaks CA, 91403", county: "Los Angeles County", phone: "213-725-2919", services: ["Personal Injury", "Insurance Claims (client's own carrier)", "Property Damage (plaintiff)", "Miscellaneous Injury / Insurance Matters", "Small Claims Court/Personal Property Prot", "Plaintiff Consumer"], languages: ["English", "Spanish"], distance: 47 },
+            { name: "Samaniego Law", address: "41715 Enterprise Circle North Suite 205, Temecula CA, 92590", county: "Riverside County", phone: "562-206-0245", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English", "French"], distance: 47 },
+            { name: "Stephen R. McLeod, Esq.", address: "15300 Ventura Boulevard Suite 215, Sherman Oaks CA, 91403", county: "Los Angeles County", phone: "818-905-0902", services: ["Last Will and Testament", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence", "Deed"], languages: ["Korean", "English", "Arabic", "Spanish"], distance: 47 },
+            { name: "Law Office of Steve Fox", address: "42156 North 10th Street West Suite 103, Lancaster CA, 93534", county: "Los Angeles County", phone: "661-726-5151", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English", "Hebrew", "Spanish"], distance: 49 },
+            { name: "Parhami Law Group", address: "6345 Balboa Blvd 247, Encino CA, 91316", county: "Los Angeles County", phone: "818-205-2445", services: ["Prenuptial Agreement", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Bankruptcy"], languages: ["Farsi", "Armenian", "English", "Spanish"], distance: 50 },
+            { name: "Law Offices of C. Valerie Ibe, Inc.", address: "7220 Owensmouth Avenue Ste 220, CANOGA PARK CA, 91303", county: "Los Angeles County", phone: "818-900-5298", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 55 },
+            { name: "Westlake Legal Services, Inc.", address: "24273 Main Street, Newhall CA, 91321", county: "Los Angeles County", phone: "818-597-1711", services: ["Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 55 },
+            { name: "Law Office of Hedy Zhang", address: "5955 De Soto Avenue, Woodland Hills CA, 91367", county: "Los Angeles County", phone: "310-312-1996", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Custody - Establish / Change (uncontested)", "Name Change", "Protection From Domestic Violence"], languages: ["English", "Chinese"], distance: 55 },
+            { name: "Peter Stone, APC.", address: "21534 Devonshire St Ste I, STE I, Chatsworth CA, 91311", county: "Los Angeles County", phone: "800-529-7866", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems"], languages: ["Tagalog", "English", "Filipino"], distance: 56 },
+            { name: "TA Law Group", address: "23586 Calabasas Road 208, Calabasas CA, 91302", county: "Los Angeles County", phone: "818-722-1516", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["Farsi", "English"], distance: 57 },
+            { name: "Vaksman Khalfin, PC", address: "23679 Calabasas Road Suite 942, Calabasas CA, 91302", county: "Los Angeles County", phone: "877-780-4727", services: ["Inheritance Rights", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Personal Injury"], languages: ["Russian", "English", "Spanish"], distance: 57 },
+            { name: "Law Office of Michael Sudman", address: "2828 Cochran Street Suite 483, Simi Valley CA, 93063", county: "Ventura County", phone: "805-415-2418", services: ["Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 64 },
+            { name: "Meraki Law", address: "380 South Melrose Drive 300, Vista CA, 92801", county: "San Diego County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 64 },
+            { name: "Law Offices of E. John Damasco", address: "1265 Carlsbad Village Drive Suite 100, Carlsbad CA, 92008", county: "San Diego County", phone: "619-640-1444", services: ["Prenuptial Agreement", "Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 65 },
+            { name: "Westlake Legal Services, Inc.", address: "31194 La Baya Drive Suite 206, Westlake Village CA, 91362", county: "Los Angeles County", phone: "818-597-1711", services: ["Post-Decree Support Orders", "Divorce / Dissolution (uncontested)", "Divorce / Dissolution (contested)", "Custody - Establish / Change (uncontested)", "Custody - Establish / Change (contested)"], languages: ["English"], distance: 66 },
+            { name: "Scott A. Kudler, Esq.", address: "100 N. Westlake Blvd Suite 203, Westlake Village CA, 91362", county: "Ventura County", phone: "805-379-0595", services: ["Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning", "Miscellaneous Wills And Estates", "Purchase Of Residence", "Sale Of Residence"], languages: ["English"], distance: 67 },
+            { name: "Meraki Law", address: "275 E. Hillcrest Drive Suite 160, Thousand Oaks CA, 91360", county: "Ventura County", phone: "213-529-1967", services: ["Name Change", "Guardianship (uncontested)", "Guardianship (contested)", "Last Will and Testament", "Power Of Attorney", "Advance Healthcare Directive", "Probate", "Trust - No Tax Planning"], languages: ["English", "Spanish", "Hindi", "Punjabe", "Pakistan", "Indian"], distance: 70 },
+            { name: "Jeffrey A. Holcomb, Esq.", address: "365 E. Ave de los Arboles #115, Thousand Oaks CA, 91360", county: "Ventura County", phone: "805-380-4329", services: ["Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems", "Promissory Note", "Mortgage", "Refinance/Home Equity Loans", "Boundary/Title Disputes", "Miscellaneous Real Estate Matters"], languages: ["English"], distance: 71 },
+            { name: "Ching & Seto", address: "16516 Bernardo Center Drive Suite 300, San Diego CA, 92128", county: "San Diego County", phone: "858-397-9060", services: ["Miscellaneous Wills And Estates", "Debt Collection / Identity Theft Defense", "Miscellaneous Financial Problems", "Purchase Of Residence", "Sale Of Residence", "Promissory Note"], languages: ["Mandarin", "Chinese", "Taiwanese", "English"], distance: 80 }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const nameSearch = document.getElementById('nameSearch');
+            const serviceFilter = document.getElementById('serviceFilter');
+            const languageFilter = document.getElementById('languageFilter');
+            const countyFilter = document.getElementById('countyFilter');
+            const attorneyGrid = document.getElementById('attorneyGrid');
+            const resultsCount = document.getElementById('resultsCount');
+
+            let countyChartInstance, languageChartInstance;
+
+            function populateFilters() {
+                const services = new Set();
+                const languages = new Set();
+                const counties = new Set();
+                attorneyData.forEach(attorney => {
+                    attorney.services.forEach(s => services.add(s.trim()));
+                    attorney.languages.forEach(l => languages.add(l.trim()));
+                    counties.add(attorney.county.trim());
+                });
+
+                serviceFilter.innerHTML = '<option value="">All Services</option>' + [...services].sort().map(s => `<option value="${s}">${s}</option>`).join('');
+                languageFilter.innerHTML = '<option value="">All Languages</option>' + [...languages].sort().map(l => `<option value="${l}">${l}</option>`).join('');
+                countyFilter.innerHTML = '<option value="">All Counties</option>' + [...counties].sort().map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+            
+            function renderAttorneys() {
+                const nameQuery = nameSearch.value.toLowerCase();
+                const serviceQuery = serviceFilter.value;
+                const languageQuery = languageFilter.value;
+                const countyQuery = countyFilter.value;
+
+                const filteredAttorneys = attorneyData.filter(attorney => {
+                    const matchesName = attorney.name.toLowerCase().includes(nameQuery);
+                    const matchesService = !serviceQuery || attorney.services.includes(serviceQuery);
+                    const matchesLanguage = !languageQuery || attorney.languages.includes(languageQuery);
+                    const matchesCounty = !countyQuery || attorney.county === countyQuery;
+                    return matchesName && matchesService && matchesLanguage && matchesCounty;
+                });
+                
+                attorneyGrid.innerHTML = '';
+                if (filteredAttorneys.length === 0) {
+                    attorneyGrid.innerHTML = `<p class="text-slate-500 md:col-span-2 lg:col-span-3 text-center">No attorneys found matching your criteria.</p>`;
+                } else {
+                    filteredAttorneys.forEach((attorney, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-lg hover:border-blue-500 transition-all duration-300 flex flex-col';
+                        card.innerHTML = `
+                            <div class="flex-grow">
+                                <h3 class="text-lg font-bold text-slate-900">${attorney.name}</h3>
+                                <p class="text-sm text-slate-500 mt-1">${attorney.county}</p>
+                                <div class="mt-4 pt-4 border-t border-slate-100">
+                                    <p class="text-sm font-semibold text-slate-700">Key Services:</p>
+                                    <ul class="text-sm text-slate-600 mt-1 space-y-1">
+                                        ${attorney.services.slice(0, 3).map(s => `<li>- ${s}</li>`).join('')}
+                                        ${attorney.services.length > 3 ? `<li>... and more</li>` : ''}
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="mt-6 flex justify-between items-center">
+                                <span class="text-sm font-medium text-slate-500">${attorney.distance} miles away</span>
+                                <button data-index="${index}" class="view-details-btn bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition">View Details</button>
+                            </div>
+                        `;
+                        attorneyGrid.appendChild(card);
+                    });
+                }
+                resultsCount.textContent = `Showing ${filteredAttorneys.length} of ${attorneyData.length} attorneys`;
+                
+                document.querySelectorAll('.view-details-btn').forEach(button => {
+                   button.addEventListener('click', (e) => {
+                       const originalIndex = attorneyData.indexOf(filteredAttorneys[e.target.dataset.index]);
+                       openModal(originalIndex);
+                   })
+                });
+            }
+
+            function setupCharts() {
+                const countyCounts = attorneyData.reduce((acc, curr) => {
+                    acc[curr.county] = (acc[curr.county] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const languageCounts = attorneyData.reduce((acc, curr) => {
+                    curr.languages.forEach(lang => {
+                        acc[lang] = (acc[lang] || 0) + 1;
+                    });
+                    return acc;
+                }, {});
+
+                const countyCtx = document.getElementById('countyChart').getContext('2d');
+                countyChartInstance = new Chart(countyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(countyCounts),
+                        datasets: [{
+                            label: '# of Attorneys',
+                            data: Object.values(countyCounts),
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+
+                const languageCtx = document.getElementById('languageChart').getContext('2d');
+                languageChartInstance = new Chart(languageCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(languageCounts),
+                        datasets: [{
+                            label: 'Languages',
+                            data: Object.values(languageCounts),
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.7)', 'rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)',
+                                'rgba(16, 185, 129, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)',
+                                'rgba(107, 114, 128, 0.7)'
+                            ],
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12,
+                                    padding: 20
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function openModal(attorneyIndex) {
+                const attorney = attorneyData[attorneyIndex];
+                document.getElementById('modalName').textContent = attorney.name;
+                document.getElementById('modalAddress').textContent = attorney.address;
+                document.getElementById('modalPhone').textContent = `Phone: ${attorney.phone}`;
+                document.getElementById('modalCounty').textContent = `County: ${attorney.county}`;
+                document.getElementById('modalDistance').textContent = `Distance: ${attorney.distance} miles`;
+
+                const languagesContainer = document.getElementById('modalLanguages');
+                languagesContainer.innerHTML = '';
+                attorney.languages.forEach(lang => {
+                    const langTag = document.createElement('span');
+                    langTag.className = 'bg-slate-100 text-slate-700 text-sm font-medium mr-2 px-2.5 py-0.5 rounded-full';
+                    langTag.textContent = lang;
+                    languagesContainer.appendChild(langTag);
+                });
+                
+                if(attorney.languages.length === 0){
+                    languagesContainer.innerHTML = `<p class="text-slate-500 text-sm">No specific languages listed.</p>`;
+                }
+
+                const servicesContainer = document.getElementById('modalServices');
+                servicesContainer.innerHTML = '';
+                attorney.services.forEach(service => {
+                    const serviceItem = document.createElement('li');
+                    serviceItem.textContent = service;
+                    servicesContainer.appendChild(serviceItem);
+                });
+                
+                document.getElementById('attorneyModal').classList.remove('hidden');
+                document.getElementById('attorneyModal').classList.add('flex');
+            }
+
+            function closeModal() {
+                 document.getElementById('attorneyModal').classList.add('hidden');
+                 document.getElementById('attorneyModal').classList.remove('flex');
+            }
+            
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+            document.getElementById('attorneyModal').addEventListener('click', (e) => {
+                if (e.target.id === 'attorneyModal') {
+                    closeModal();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === "Escape") {
+                    closeModal();
+                }
+            });
+
+
+            nameSearch.addEventListener('input', renderAttorneys);
+            serviceFilter.addEventListener('change', renderAttorneys);
+            languageFilter.addEventListener('change', renderAttorneys);
+            countyFilter.addEventListener('change', renderAttorneys);
+
+            populateFilters();
+            renderAttorneys();
+            setupCharts();
+        });
+    </script>
+</body>
+</html>
