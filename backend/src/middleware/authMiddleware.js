@@ -6,7 +6,7 @@ export function authMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'devsecret');
-    req.user = { id: payload.sub };
+  req.user = { id: payload.sub, isAdmin: payload.isAdmin === true };
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Invalid token' });

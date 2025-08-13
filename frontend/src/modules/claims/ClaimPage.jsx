@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth, authHeader } from '../auth/AuthContext.jsx';
+import { Skeleton, SkeletonText } from '../ui/Skeleton.jsx';
 
 export default function ClaimPage() {
   const { id } = useParams();
@@ -75,7 +76,10 @@ export default function ClaimPage() {
   const claimDocs = docs.filter(d=>d.claimId === id);
   const unlinkedDocs = docs.filter(d=>!d.claimId);
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6 space-y-6">
+    <div className="card space-y-3"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-24" /></div>
+    <div className="grid gap-4 md:grid-cols-2"><div className="card"><SkeletonText lines={6} /></div><div className="card"><SkeletonText lines={6} /></div></div>
+  </div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!claim) return <div className="p-6">Not found</div>;
 
@@ -83,38 +87,43 @@ export default function ClaimPage() {
     <div className="flex items-center justify-between">
       <div>
         <h1 className="text-2xl font-semibold">Claim {claim.id.slice(0,8)}</h1>
-        <div className="text-sm text-gray-600">Status: {claim.status} {claim.archived && '(Archived)'}</div>
+        <div className="text-sm text-gray-600 flex items-center gap-2">Status: <span className="badge bg-blue-50 dark:bg-neutral-700 border-blue-200 dark:border-neutral-600">{claim.status}</span> {claim.archived && <span className="text-red-600 text-xs">(Archived)</span>}</div>
       </div>
       <div className="space-x-2">
         <button onClick={toggleArchive} className="px-3 py-1 rounded bg-yellow-600 text-white text-sm">{claim.archived ? 'Unarchive' : 'Archive'}</button>
         <button onClick={deleteClaim} className="px-3 py-1 rounded bg-red-600 text-white text-sm">Delete</button>
       </div>
     </div>
-
-    <section className="space-y-2">
-      <h2 className="font-medium">Case Description</h2>
-      <textarea className="w-full border rounded p-2" rows={4} value={desc} onChange={e=>setDesc(e.target.value)} />
-      <button onClick={saveDescription} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Save Description</button>
+    <section className="space-y-4 card">
+      <h2 className="font-medium">Status Progression</h2>
+      <div className="flex flex-wrap gap-2">
+        {['Draft','Questions Generated','Events Identified','Final Document Ready','VA Form Data Generated','Submitted','C&P Exam Scheduled','Decision Received'].map(s=> <button key={s} onClick={()=> { const prev = claim; setClaim(c=> ({...c, status: s, statusHistory: [...(c.statusHistory||[]), { status: s, at: new Date().toISOString() }] })); updateStatus(s).catch(()=> setClaim(prev)); }} className={`px-2 py-1 rounded text-xs border ${claim.status===s?'bg-blue-600 text-white':'bg-white dark:bg-neutral-800'}`}>{s}</button>)}
+      </div>
+      {claim.statusHistory && <ol className="relative border-l border-gray-200 dark:border-neutral-700 ml-2 text-xs space-y-3 max-h-56 overflow-auto pl-3">
+        {(claim.statusHistory||[]).slice().reverse().map((h,i)=><li key={i} className="flex flex-col">
+          <span className="absolute -left-2.5 mt-1 w-2 h-2 rounded-full bg-blue-500"></span>
+          <span className="font-medium">{h.status}</span>
+          <span className="text-[10px] text-gray-500">{new Date(h.at).toLocaleString()}</span>
+        </li>)}
+      </ol>}
     </section>
 
-    <section className="space-y-2">
+    <section className="space-y-2 card">
+      <h2 className="font-medium">Case Description</h2>
+      <textarea className="textarea" rows={4} value={desc} onChange={e=>setDesc(e.target.value)} />
+      <button onClick={saveDescription} className="btn-primary px-4 py-1">Save Description</button>
+    </section>
+
+    <section className="space-y-2 card">
       <h2 className="font-medium">Setup</h2>
       <div className="grid gap-2 md:grid-cols-2">
-        <input className="border p-2 rounded" placeholder="Veteran Name" value={setup.veteranName} onChange={e=>setSetup({...setup,veteranName:e.target.value})} />
-        <input className="border p-2 rounded" placeholder="Relationship" value={setup.relationship} onChange={e=>setSetup({...setup,relationship:e.target.value})} />
+        <input className="input" placeholder="Veteran Name" value={setup.veteranName} onChange={e=>setSetup({...setup,veteranName:e.target.value})} />
+        <input className="input" placeholder="Relationship" value={setup.relationship} onChange={e=>setSetup({...setup,relationship:e.target.value})} />
       </div>
-      <button onClick={saveSetup} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Save Setup</button>
+      <button onClick={saveSetup} className="btn-primary px-4 py-1">Save Setup</button>
     </section>
 
-    <section className="space-y-2">
-      <h2 className="font-medium">Status Progression</h2>
-      <div className="flex gap-2">
-        {['Draft','Analysis Complete','Final Document Ready','Submitted','C&P Exam Scheduled','Decision Received'].map(s=> <button key={s} onClick={()=>updateStatus(s)} className={`px-2 py-1 rounded text-xs border ${claim.status===s?'bg-blue-600 text-white':'bg-white'}`}>{s}</button>)}
-      </div>
-      {claim.statusHistory && <ul className="text-xs text-gray-600 list-disc ml-5 space-y-1 max-h-40 overflow-auto">{(claim.statusHistory||[]).map((h,i)=><li key={i}>{h.status} @ {new Date(h.at).toLocaleString()}</li>)}</ul>}
-    </section>
-
-    <section className="space-y-2">
+    <section className="space-y-2 card">
       <h2 className="font-medium">AI Steps</h2>
       <div className="flex flex-wrap gap-2 text-sm">
         <button onClick={runQuestions} className="bg-indigo-600 text-white px-3 py-1 rounded">Generate Questions</button>
@@ -142,7 +151,7 @@ export default function ClaimPage() {
       </div>
     </section>
 
-    <section className="space-y-2">
+  <section className="space-y-2 card">
       <h2 className="font-medium">Documents</h2>
       <div className="text-sm">Linked Documents</div>
       <ul className="list-disc ml-5 text-sm">

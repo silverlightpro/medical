@@ -13,22 +13,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     try {
-      const res = await axios.post('/auth/login', form);
-      login(res.data.token);
+  const res = await axios.post('/auth/login', form);
+  login(res.data.token, res.data.isAdmin);
       nav('/');
     } catch (e) {
       setError(e.response?.data?.error || 'Login failed');
     }
   }
 
-  return <div className="min-h-screen flex items-center justify-center p-4">
-    <form onSubmit={submit} className="bg-white p-6 rounded shadow w-full max-w-sm space-y-4">
-      <h1 className="text-xl font-semibold">Login</h1>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      <input className="border w-full p-2 rounded" placeholder="Email" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} />
-      <input className="border w-full p-2 rounded" placeholder="Password" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
-      <button className="bg-blue-600 text-white px-4 py-2 rounded w-full">Sign In</button>
-      <p className="text-sm">No account? <Link className="text-blue-600" to="/register">Register</Link></p>
+  return <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-brand-50 to-white dark:from-neutral-900 dark:to-neutral-900">
+    <form onSubmit={submit} className="card w-full max-w-sm space-y-4">
+      <h1 className="text-2xl font-semibold text-center">Sign In</h1>
+      {error && <div className="text-red-500 text-sm">{error}</div>}
+      <div className="space-y-1">
+        <input className="input" placeholder="Email" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} />
+      </div>
+      <div className="space-y-1">
+        <input className="input" placeholder="Password" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
+      </div>
+      <button className="btn-primary w-full">Sign In</button>
+      <p className="text-xs text-center">No account? <Link className="text-brand-600 hover:underline" to="/register">Register</Link></p>
     </form>
   </div>;
 }

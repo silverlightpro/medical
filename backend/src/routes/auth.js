@@ -55,9 +55,9 @@ router.post('/login', async (req, res, next) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({}, process.env.JWT_SECRET || 'devsecret', { subject: user.id, expiresIn: '7d' });
+  const token = jwt.sign({ isAdmin: user.isAdmin }, process.env.JWT_SECRET || 'devsecret', { subject: user.id, expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
-    res.json({ token });
+  res.json({ token, isAdmin: user.isAdmin });
   } catch (e) { next(e); }
 });
 
