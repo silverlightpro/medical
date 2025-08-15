@@ -10,8 +10,7 @@ const jsonFields = [
   'potentialClaimEvents',
   'selectedClaims',
   'finalDocument',
-  'vaFormData',
-  'statusHistory'
+  'vaFormData'
 ];
 
 function parseClaim(claim) {
@@ -36,7 +35,23 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/:id', async (req, res, next) => {
+  try {
+    const claim = await prisma.claim.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+    if (!claim) return res.status(404).json({ error: 'Not found' });
+    res.json(parseClaim(claim));
+  } catch (e) { next(e); }
+});
+
 // Get single claim (parsed)
+router.get('/:id', async (req, res, next) => {
+  try {
+    const claim = await prisma.claim.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+    if (!claim) return res.status(404).json({ error: 'Not found' });
+    res.json(parseClaim(claim));
+  } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const claim = await prisma.claim.findFirst({ where: { id: req.params.id, userId: req.user.id } });
